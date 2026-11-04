@@ -1,0 +1,29 @@
+# Copyright (c) 2026 SB Intuitions Corp.
+# SPDX-License-Identifier: MIT
+# Data construction, metrics, aggregation, and plotting. Runs on CPU.
+#
+# Pins follow the environment used for the paper runs (NVIDIA PyTorch 26.01
+# container plus the packages below), with Transformers 4.57.6 as reported in the
+# paper. huggingface_hub is held below 1.0 because Transformers 4.57.x requires it.
+# Packages marked "not pinned" were not part of the recorded environment; the
+# lower bounds are the versions the scripts were written against.
+torch==2.10.0
+transformers==4.57.6
+tokenizers==0.22.2
+huggingface_hub==0.36.2
+datasets==4.8.5
+safetensors==0.7.0
+numpy==2.2.6
+scipy==1.16.0
+scikit-learn==1.8.0
+pandas==2.3.3
+pyarrow==23.0.1
+fsspec==2024.12.0
+
+# Not pinned
+matplotlib>=3.8
+seaborn>=0.13
+adjustText>=1.0
+requests>=2.31
+tqdm>=4.66
+tabulate>=0.9    # pandas.DataFrame.to_markdown, used by the data and eval scripts

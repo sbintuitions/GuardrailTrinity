@@ -1,0 +1,15 @@
+# Copyright (c) 2026 SB Intuitions Corp.
+# SPDX-License-Identifier: MIT
+# FSDP configuration for the MoE training path (accelerate --config_file).
+compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+fsdp_config:
+  fsdp_sharding_strategy: FULL_SHARD
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: Qwen3MoeDecoderLayer
+  fsdp_backward_prefetch: BACKWARD_PRE
+  fsdp_offload_params: false
+  fsdp_sync_module_states: true
+  fsdp_use_orig_params: true
+  fsdp_cpu_ram_efficient_loading: true
+mixed_precision: bf16

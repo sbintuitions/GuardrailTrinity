@@ -11,10 +11,11 @@ Conference of the Asia-Pacific Chapter of the Association for Computational
 Linguistics and the 15th International Joint Conference on Natural Language
 Processing.
 
-> **Status: the code release is in preparation.** This repository currently holds the
-> license and this README. The data construction, training, and evaluation code for
-> every method in the paper will be published here soon. Watch the repository to be
-> notified.
+> **Status: code released.** This repository holds the data construction, training,
+> and evaluation code for every method in the paper. See
+> [What is verified](#what-is-verified) for what has been run end to end.
+
+> **Warning:** the datasets used in this repository contain harmful text.
 
 ## Abstract
 
@@ -73,21 +74,121 @@ baseline configurations. All figures are means over seeds {0, 1, 42}.
 The paper also reports an audit of the synthesized reasoning chains and documents
 seed instability at 8B. See the Limitations section for the scope of these claims.
 
-## Planned release
+## Release
 
 The release covers every method introduced in the paper.
 
-- **Data construction.** The curation pipeline end to end: procedural schema sampling
-  (taxonomy codes, category ordering, and list, JSON, or paragraph rendering, with the
-  semantic collision filter on distractors), reasoning chain decomposition,
+- **Data construction** (`data/`). The curation pipeline end to end: procedural schema
+  sampling (taxonomy codes, category ordering, and list, JSON, or paragraph rendering,
+  with the semantic collision filter on distractors), reasoning chain decomposition,
   hard-negative selection, permission augmentation, and the fast and slow blend that
-  assembles a dual-mode training set.
-- **Training.** The supervised fine-tuning loops and the LoRA and accelerator
-  configurations behind the reported runs, for dense and mixture-of-experts base
-  models.
-- **Evaluation.** The evaluation harness for the benchmark suites in the paper,
-  including our BeaverTails-PolicyShift probe, together with the scripts that
-  aggregate results into the reported tables.
+  assembles a dual-mode training set, plus the generator for the eight test benchmarks.
+- **Training** (`training/`). The supervised fine-tuning loops for dense and
+  mixture-of-experts base models, the LoRA, DeepSpeed, and FSDP configurations, and
+  `recipe.py`, which holds the per-model hyperparameters and prints the exact launch
+  command for a base model, variant, and seed.
+- **Evaluation** (`eval/`). The evaluation harness for the benchmark suites in the
+  paper, including our BeaverTails-PolicyShift probe, the baseline runners, the scripts
+  that aggregate results into the reported tables and figures, and the paper's analyses.
+- **Documentation** (`docs/`) and **tests** (`tests/`).
+
+### Names
+
+Variants use the paper's names: `Aegis`, `Wild`, and `Mix` (fast, System-1 only),
+`Reason` and `Adapt` (slow, System-2 only), and `Hybrid` (both modes), each with
+optional `-P` (category permission) and `-PN` (permission plus hard negatives)
+augmentations. A `-1` or `-2` suffix on a Hybrid result row is the inference mode:
+System-1 (fast) or System-2 (slow). Runs are named
+`{BASE}_{VARIANT}_lr-{LR}_seed-{SEED}`, for example
+`Qwen3-8B_Hybrid-PN_lr-1e-4_seed-42`.
+
+### Layout
+
+```
+data/          dataset construction (train and test) and sampling
+training/      train.py, train_moe.py, recipe.py, DeepSpeed and FSDP configs
+eval/          evaluate_universal.py, run_ladder.py, baselines, tables, figures, analyses
+docs/          reproduce.md, data_pipeline.md, training.md, evaluation.md
+tests/         CPU unit tests
+```
+
+## Install
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt        # data, metrics, tables, plots (CPU)
+pip install -r requirements-gpu.txt    # training and evaluation (CUDA GPUs)
+```
+
+The requirements files pin exact versions (for example Transformers 4.57.6, as
+reported in the paper, and vLLM 0.19.1). flash-attn is installed separately because
+it is compiled against your CUDA toolkit; see [docs/reproduce.md](docs/reproduce.md)
+for that step and for the `--use_flash_attn False` fallback.
+
+We tested with Python 3.12 and CUDA GPUs (NVIDIA H100 80GB). The paper runs used one
+node with 8 GPUs. A short Qwen3-8B training run (batch size 4, context length 4096)
+and its vLLM evaluation also ran on a single 80GB GPU. Models and datasets download
+from the Hugging Face Hub, so set `HF_HOME` to a directory with enough space and log
+in with a token (`HF_TOKEN` or `huggingface-cli login`) for the gated repositories
+listed below.
+
+## Datasets and models
+
+The data scripts download the public source datasets and build every training and
+test file locally. Each source keeps its own license; please check it before use.
+
+| Dataset | Used for | Hub or source | License | Access |
+|---|---|---|---|---|
+| AEGIS 2.0 | Training, `aegis` test | [nvidia/Aegis-AI-Content-Safety-Dataset-2.0](https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-2.0) | CC BY 4.0 | Open |
+| WildGuardMix | Training, `wildguard` test | [allenai/wildguardmix](https://huggingface.co/datasets/allenai/wildguardmix) | ODC-BY | Gated (accept the terms) |
+| ToxicChat | `toxicchat` test | [lmsys/toxic-chat](https://huggingface.co/datasets/lmsys/toxic-chat) | CC BY-NC 4.0 | Open |
+| DynaHate v0.2.3 | `dynahate` test | [GitHub CSV](https://github.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset) | CC BY 4.0 | Open |
+| DynaBench | `dynaguard` test | [montehoover/DynaBench](https://huggingface.co/datasets/montehoover/DynaBench) | MIT | Open |
+| BeaverTails | `beavertails`, `beavertails_dynamic` (PolicyShift) tests | [PKU-Alignment/BeaverTails](https://huggingface.co/datasets/PKU-Alignment/BeaverTails) | CC BY-NC 4.0 | Open |
+| XSTest | `xstest` test | [Paul/XSTest](https://huggingface.co/datasets/Paul/XSTest) | CC BY 4.0 | Open |
+
+ToxicChat and BeaverTails are for non-commercial use only. The hard-negative selector
+uses [unitary/toxic-bert](https://huggingface.co/unitary/toxic-bert) (Apache 2.0),
+which the training-data script downloads on first use. See
+[docs/data_pipeline.md](docs/data_pipeline.md) for how each source is processed.
+
+We train and evaluate the following base models. Pass the name in the first column to
+`training/recipe.py --model` and `eval/run_ladder.py --base`.
+
+| Name | Checkpoint | License | Access |
+|---|---|---|---|
+| `Llama-3.1-8B-Instruct` | [meta-llama/Meta-Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Meta-Llama-3.1-8B-Instruct) | Llama 3.1 Community License | Gated (request access) |
+| `Qwen3-8B` | [Qwen/Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B) | Apache 2.0 | Open |
+| `Qwen3-14B` | [Qwen/Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B) | Apache 2.0 | Open |
+| `Qwen3-32B` | [Qwen/Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) | Apache 2.0 | Open |
+| `Qwen3-30B-A3B-Instruct-2507` | [Qwen/Qwen3-30B-A3B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507) | Apache 2.0 | Open |
+
+The baseline guard models are listed in [docs/evaluation.md](docs/evaluation.md).
+
+## Quickstart
+
+```bash
+python data/generate_train_datasets.py                       # 12 variants -> datasets/
+python data/generate_test_datasets.py                        # 8 benchmarks -> datasets/
+python training/recipe.py --model Qwen3-8B --variant Aegis --seed 0 --run
+python eval/run_ladder.py --base Qwen3-8B --model_root output --variants Aegis --seeds 0 --suite A --run
+```
+
+`recipe.py` assumes one node with 8 GPUs; drop `--run` to print the command and adapt
+it. [docs/reproduce.md](docs/reproduce.md) walks through the full reproduction: data,
+training for every variant and seed, evaluation, tables and figures, and analyses.
+Run the unit tests with `pip install pytest && pytest tests`.
+
+## What is verified
+
+- Dataset generation: a fresh run reproduces the training and validation files used
+  for the paper byte for byte for all 12 variants, and the statistics table matches.
+- Aggregation: the table scripts reproduce our aggregated result tables exactly from
+  the per-run result files, for all four base models and the baselines.
+- A short training run, LoRA merge, and vLLM evaluation of a Qwen3-8B model ran end
+  to end on one GPU with the pinned packages, with `--use_flash_attn False`.
+- Not rerun for this release: flash-attn 2.8.3, the multi-GPU launch and the
+  mixture-of-experts path, and the test-benchmark generator.
 
 ## Citation
 
